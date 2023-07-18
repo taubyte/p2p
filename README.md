@@ -1,3 +1,9 @@
+[![Release](https://img.shields.io/github/release/taubyte/p2p.svg)](https://github.com/taubyte/p2p/releases)
+[![License](https://img.shields.io/github/license/taubyte/p2p)](LICENSE)
+[![Go Report Card](https://goreportcard.com/badge/taubyte/p2p)](https://goreportcard.com/report/taubyte/p2p)
+[![GoDoc](https://godoc.org/github.com/taubyte/p2p?status.svg)](https://pkg.go.dev/github.com/taubyte/p2p)
+[![Discord](https://img.shields.io/discord/973677117722202152?color=%235865f2&label=discord)](https://discord.gg/taubyte)
+
 # p2p
 
 This Go library provides a powerful abstraction layer over libp2p, ipfslite, and other related technologies, enabling streamlined peer-to-peer network development.
