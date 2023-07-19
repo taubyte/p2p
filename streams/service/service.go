@@ -11,12 +11,12 @@ import (
 type CommandService struct {
 	//ctx    context.Context
 	name   string
-	peer   *peer.Node
+	peer   peer.Node
 	router *(router.Router)
 	stream *(streams.StreamManger)
 }
 
-func New(peer *peer.Node, name string, path string) (*CommandService, error) {
+func New(peer peer.Node, name string, path string) (*CommandService, error) {
 	var cs CommandService
 
 	cs.name = name

@@ -23,13 +23,13 @@ type StreamHandler func(Stream)
 type StreamManger struct {
 	ctx        context.Context
 	ctx_cancel context.CancelFunc
-	peer       *peer.Node
+	peer       peer.Node
 	name       string
 	path       string
 	handler    StreamHandler
 }
 
-func New(peer *peer.Node, name string, path string) *StreamManger {
+func New(peer peer.Node, name string, path string) *StreamManger {
 	ctx, ctx_cancel := context.WithCancel(peer.Context())
 	s := StreamManger{
 		ctx:        ctx,

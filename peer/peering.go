@@ -40,7 +40,7 @@ const (
 // peerHandler keeps track of all state related to a specific "peering" peer.
 type peerHandler struct {
 	peer   peer.ID
-	node   *Node
+	node   *node
 	host   host.Host
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -148,8 +148,8 @@ func (ph *peerHandler) startIfDisconnected() {
 
 // PeeringService maintains connections to specified peers, reconnecting on
 // disconnect with a back-off.
-type PeeringService struct {
-	node *Node
+type peeringService struct {
+	node *node
 	host host.Host
 
 	mu    sync.RWMutex
@@ -159,14 +159,14 @@ type PeeringService struct {
 
 // NewPeeringService constructs a new peering service. Peers can be added and
 // removed immediately, but connections won't be formed until `Start` is called.
-func NewPeeringService(node *Node) *PeeringService {
-	return &PeeringService{node: node, host: node.host, peers: make(map[peer.ID]*peerHandler)}
+func NewPeeringService(node *node) PeeringService {
+	return &peeringService{node: node, host: node.host, peers: make(map[peer.ID]*peerHandler)}
 }
 
 // Start starts the peering service, connecting and maintaining connections to
 // all registered peers. It returns an error if the service has already been
 // stopped.
-func (ps *PeeringService) Start() error {
+func (ps *peeringService) Start() error {
 	ps.mu.Lock()
 	defer ps.mu.Unlock()
 
@@ -187,7 +187,7 @@ func (ps *PeeringService) Start() error {
 }
 
 // Stop stops the peering service.
-func (ps *PeeringService) Stop() error {
+func (ps *peeringService) Stop() error {
 	ps.host.Network().StopNotify((*netNotifee)(ps))
 
 	ps.mu.Lock()
@@ -210,7 +210,7 @@ func (ps *PeeringService) Stop() error {
 //
 // Add peer may also be called multiple times for the same peer. The new
 // addresses will replace the old.
-func (ps *PeeringService) AddPeer(info peer.AddrInfo) {
+func (ps *peeringService) AddPeer(info peer.AddrInfo) {
 	ps.mu.Lock()
 	defer ps.mu.Unlock()
 
@@ -245,7 +245,7 @@ func (ps *PeeringService) AddPeer(info peer.AddrInfo) {
 // RemovePeer removes a peer from the peering service. This function may be
 // safely called at any time: before the service is started, while running, or
 // after it stops.
-func (ps *PeeringService) RemovePeer(id peer.ID) {
+func (ps *peeringService) RemovePeer(id peer.ID) {
 	ps.mu.Lock()
 	defer ps.mu.Unlock()
 
@@ -258,10 +258,10 @@ func (ps *PeeringService) RemovePeer(id peer.ID) {
 	}
 }
 
-type netNotifee PeeringService
+type netNotifee peeringService
 
 func (nn *netNotifee) Connected(_ network.Network, c network.Conn) {
-	ps := (*PeeringService)(nn)
+	ps := (*peeringService)(nn)
 
 	p := c.RemotePeer()
 	ps.mu.RLock()
@@ -274,7 +274,7 @@ func (nn *netNotifee) Connected(_ network.Network, c network.Conn) {
 }
 
 func (nn *netNotifee) Disconnected(_ network.Network, c network.Conn) {
-	ps := (*PeeringService)(nn)
+	ps := (*peeringService)(nn)
 
 	p := c.RemotePeer()
 	ps.mu.RLock()
