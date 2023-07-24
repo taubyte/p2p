@@ -42,7 +42,7 @@ func init() {
 type Client struct {
 	ctx  context.Context
 	ctxC context.CancelFunc
-	node *peer.Node
+	node peer.Node
 	path string
 }
 
@@ -50,7 +50,7 @@ func (c *Client) Context() context.Context {
 	return c.ctx
 }
 
-func New(ctx context.Context, node *peer.Node, peers []string, path string, min int, max int) (*Client, error) {
+func New(ctx context.Context, node peer.Node, peers []string, path string, min int, max int) (*Client, error) {
 	c := &Client{
 		node: node,
 		path: path,

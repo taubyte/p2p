@@ -64,7 +64,7 @@ func IpfsSTyleAddrsFactory(announce []string, noAnnounce []string) libp2p.Option
 // override will make the factory ignore discovered addresses
 //
 //	only use for public nodes
-func (p *Node) SimpleAddrsFactory(announce []string, override bool) libp2p.Option {
+func (p *node) SimpleAddrsFactory(announce []string, override bool) libp2p.Option {
 	logger.Debugf("SimpleAddrsFactory: Will Announce %v", announce)
 	var annouce_addrs = make([]ma.Multiaddr, 0, len(announce))
 	for _, a := range announce {

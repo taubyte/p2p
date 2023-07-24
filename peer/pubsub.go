@@ -10,7 +10,7 @@ import (
 type PubSubConsumerHandler func(msg *pubsub.Message)
 type PubSubConsumerErrorHandler func(err error)
 
-func (p *Node) NewPubSubKeepAlive(ctx context.Context, cancel context.CancelFunc, name string) error {
+func (p *node) NewPubSubKeepAlive(ctx context.Context, cancel context.CancelFunc, name string) error {
 	// Use a special pubsub topic to avoid disconnecting
 	// from globaldb peers.
 
@@ -40,7 +40,7 @@ func (p *Node) NewPubSubKeepAlive(ctx context.Context, cancel context.CancelFunc
 	return errorClosed
 }
 
-func (p *Node) getOrCreateTopic(name string) (topic *pubsub.Topic, err error) {
+func (p *node) getOrCreateTopic(name string) (topic *pubsub.Topic, err error) {
 	if !p.closed {
 		p.topicsMutex.Lock()
 		defer p.topicsMutex.Unlock()
@@ -62,7 +62,7 @@ func (p *Node) getOrCreateTopic(name string) (topic *pubsub.Topic, err error) {
 	return
 }
 
-func (p *Node) PubSubSubscribe(name string, handler PubSubConsumerHandler, err_handler PubSubConsumerErrorHandler) error {
+func (p *node) PubSubSubscribe(name string, handler PubSubConsumerHandler, err_handler PubSubConsumerErrorHandler) error {
 	if !p.closed {
 		topic, err := p.getOrCreateTopic(name)
 		if err != nil {
@@ -75,7 +75,7 @@ func (p *Node) PubSubSubscribe(name string, handler PubSubConsumerHandler, err_h
 	return errorClosed
 }
 
-func (p *Node) PubSubSubscribeToTopic(topic *pubsub.Topic, handler PubSubConsumerHandler, err_handler PubSubConsumerErrorHandler) error {
+func (p *node) PubSubSubscribeToTopic(topic *pubsub.Topic, handler PubSubConsumerHandler, err_handler PubSubConsumerErrorHandler) error {
 	if !p.closed {
 		subs, err := topic.Subscribe()
 		if err != nil {
@@ -122,7 +122,7 @@ func (p *Node) PubSubSubscribeToTopic(topic *pubsub.Topic, handler PubSubConsume
 }
 
 // TODO: make PubSubSubscribe not recreate topics,  should cache and open.
-func (p *Node) PubSubSubscribeContext(ctx context.Context, name string, handler PubSubConsumerHandler, err_handler PubSubConsumerErrorHandler) error {
+func (p *node) PubSubSubscribeContext(ctx context.Context, name string, handler PubSubConsumerHandler, err_handler PubSubConsumerErrorHandler) error {
 	if !p.closed {
 		topic, err := p.getOrCreateTopic(name)
 		if err != nil {
@@ -157,7 +157,7 @@ func (p *Node) PubSubSubscribeContext(ctx context.Context, name string, handler 
 	return errorClosed
 }
 
-func (p *Node) PubSubPublish(ctx context.Context, name string, data []byte) error {
+func (p *node) PubSubPublish(ctx context.Context, name string, data []byte) error {
 	if !p.closed {
 		topic, err := p.getOrCreateTopic(name)
 		if err != nil {

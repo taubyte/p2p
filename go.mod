@@ -6,6 +6,7 @@ require (
 	github.com/fxamacker/cbor/v2 v2.4.0
 	github.com/hsanjuan/ipfs-lite v1.7.0
 	github.com/ipfs/boxo v0.8.1
+	github.com/ipfs/go-block-format v0.1.2
 	github.com/ipfs/go-cid v0.4.1
 	github.com/ipfs/go-datastore v0.6.0
 	github.com/ipfs/go-ds-pebble v0.2.4
@@ -16,6 +17,8 @@ require (
 	github.com/libp2p/go-libp2p-pubsub v0.9.3
 	github.com/libp2p/go-libp2p-record v0.2.0
 	github.com/multiformats/go-multiaddr v0.9.0
+	github.com/multiformats/go-multicodec v0.8.1
+	github.com/multiformats/go-multihash v0.2.1
 	github.com/pkg/errors v0.9.1
 	github.com/taubyte/utils v0.1.6-pre.v2
 	github.com/whyrusleeping/multiaddr-filter v0.0.0-20160516205228-e903e4adabd7
@@ -62,7 +65,6 @@ require (
 	github.com/huin/goupnp v1.1.0 // indirect
 	github.com/ipfs/bbloom v0.0.4 // indirect
 	github.com/ipfs/go-bitfield v1.1.0 // indirect
-	github.com/ipfs/go-block-format v0.1.2 // indirect
 	github.com/ipfs/go-cidutil v0.1.0 // indirect
 	github.com/ipfs/go-ipfs-delay v0.0.1 // indirect
 	github.com/ipfs/go-ipfs-pq v0.0.3 // indirect
@@ -106,8 +108,6 @@ require (
 	github.com/multiformats/go-multiaddr-dns v0.3.1 // indirect
 	github.com/multiformats/go-multiaddr-fmt v0.1.0 // indirect
 	github.com/multiformats/go-multibase v0.2.0 // indirect
-	github.com/multiformats/go-multicodec v0.8.1 // indirect
-	github.com/multiformats/go-multihash v0.2.1 // indirect
 	github.com/multiformats/go-multistream v0.4.1 // indirect
 	github.com/multiformats/go-varint v0.0.7 // indirect
 	github.com/onsi/ginkgo/v2 v2.9.2 // indirect

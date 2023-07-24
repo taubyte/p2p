@@ -16,7 +16,7 @@ type ReadSeekCloser interface {
 
 var errorClosed = errors.New("node is closed")
 
-func (p *Node) DeleteFile(id string) error {
+func (p *node) DeleteFile(id string) error {
 	if !p.closed {
 		_cid, err := cid.Decode(id)
 		if err != nil {
@@ -29,7 +29,7 @@ func (p *Node) DeleteFile(id string) error {
 	return errorClosed
 }
 
-func (p *Node) AddFile(r io.Reader) (_cid string, err error) {
+func (p *node) AddFile(r io.Reader) (_cid string, err error) {
 	if !p.closed {
 		var n ipld.Node
 		n, err = p.ipfs.AddFile(p.ctx, r, nil)
@@ -44,7 +44,7 @@ func (p *Node) AddFile(r io.Reader) (_cid string, err error) {
 }
 
 // Note: context should have a timeout and depend on the peer context as parent
-func (p *Node) GetFile(ctx context.Context, id string) (ReadSeekCloser, error) {
+func (p *node) GetFile(ctx context.Context, id string) (ReadSeekCloser, error) {
 	if !p.closed {
 		_cid, err := cid.Decode(id)
 		if err != nil {
@@ -56,7 +56,7 @@ func (p *Node) GetFile(ctx context.Context, id string) (ReadSeekCloser, error) {
 	return nil, errorClosed
 }
 
-func (p *Node) GetFileFromCid(ctx context.Context, cid cid.Cid) (ReadSeekCloser, error) {
+func (p *node) GetFileFromCid(ctx context.Context, cid cid.Cid) (ReadSeekCloser, error) {
 	if !p.closed {
 		return p.ipfs.GetFile(ctx, cid)
 	}
@@ -64,7 +64,7 @@ func (p *Node) GetFileFromCid(ctx context.Context, cid cid.Cid) (ReadSeekCloser,
 	return nil, errorClosed
 }
 
-func (p *Node) AddFileForCid(r io.Reader) (cid.Cid, error) {
+func (p *node) AddFileForCid(r io.Reader) (cid.Cid, error) {
 	if !p.closed {
 		n, err := p.ipfs.AddFile(p.ctx, r, nil)
 		if err != nil {

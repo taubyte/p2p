@@ -11,7 +11,7 @@ import (
 
 var PingTimeout = time.Second * 4
 
-func (p *Node) Ping(pid string, count int) (healthy int, rtt time.Duration, err error) {
+func (p *node) Ping(pid string, count int) (healthy int, rtt time.Duration, err error) {
 	if !p.closed {
 		if count <= 0 {
 			return 0, 0, errors.New("ping count must be positive")
