@@ -200,6 +200,7 @@ func TestClientMultiSend(t *testing.T) {
 		return
 	}
 	defer svr1.Stop()
+
 	err = svr1.Define("hi", func(context.Context, streams.Connection, command.Body) (cr.Response, error) {
 		return cr.Response{"message": "HI"}, nil
 	})
@@ -230,6 +231,7 @@ func TestClientMultiSend(t *testing.T) {
 		return
 	}
 	defer svr2.Stop()
+
 	err = svr2.Define("hi", func(context.Context, streams.Connection, command.Body) (cr.Response, error) {
 		return cr.Response{"message": "HI"}, nil
 	})
@@ -271,26 +273,25 @@ func TestClientMultiSend(t *testing.T) {
 	if err != nil {
 		t.Errorf("Client creation returned error `%s`", err.Error())
 		return
-	} else {
-		res, errs, err := cd.MultiSend("hi", command.Body{}, 2)
-		if err != nil {
-			t.Errorf("Sending command returned error `%s`", err.Error())
-			return
-		}
-
-		if len(res) != 2 && len(errs) == 0 {
-			t.Errorf("MultiSending command failed R=%d, E=%d", len(res), len(errs))
-			return
-		}
-
-		for p, r := range res {
-			if r["message"] != "HI" {
-				t.Errorf("node %s returned bad response `%s`", p.Pretty(), r)
-				return
-			}
-		}
-
-		//Close
-		cd.Close()
 	}
+
+	res, errs, err := cd.MultiSend("hi", command.Body{}, 2)
+	if err != nil {
+		t.Errorf("Sending command returned error `%s`", err.Error())
+		return
+	}
+
+	if len(res) != 2 && len(errs) == 0 {
+		t.Errorf("MultiSending command failed R=%d, E=%d", len(res), len(errs))
+		return
+	}
+
+	for p, r := range res {
+		if r["message"] != "HI" {
+			t.Errorf("node %s returned bad response `%s`", p.Pretty(), r)
+			return
+		}
+	}
+
+	cd.Close()
 }

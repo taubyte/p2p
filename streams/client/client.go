@@ -144,6 +144,7 @@ func (c *Client) MultiSend(cmdName string, body command.Body, thresh int) (map[p
 	if err != nil {
 		return nil, nil, err
 	}
+
 	rets := make(map[peerCore.ID]cr.Response)
 	errs := make(map[peerCore.ID]error)
 	for resp := range responses {
@@ -189,7 +190,7 @@ func (c *Client) discover(ctx context.Context) <-chan peerCore.AddrInfo {
 		if len(peers) == 0 {
 			discPeers, err := c.node.Discovery().FindPeers(ctx, c.path, discovery.Limit(DiscoveryLimit))
 			if err != nil {
-				logger.Errorf("discovering nodes for `%s` failed with: %s", proto, err)
+				logger.Errorf("discovering nodes for `%s` failed with: %w", proto, err)
 				return
 			}
 
@@ -226,7 +227,7 @@ func (c *Client) connect(peer peerCore.AddrInfo) (network.Stream, bool, error) {
 
 	strm, err := c.node.Peer().NewStream(network.WithNoDial(c.ctx, "application ensured connection to peer exists"), peer.ID, protocol.ID(c.path))
 	if err != nil {
-		logger.Errorf("starting stream to `%s`;`%s` failed with: %s", peer.ID.String(), c.path, err)
+		logger.Errorf("starting stream to `%s`;`%s` failed with: %w", peer.ID.String(), c.path, err)
 		return nil, false, err
 	}
 
@@ -239,21 +240,21 @@ func (c *Client) sendTo(strm stream, deadline time.Time, cmdName string, body co
 	if err := strm.SetWriteDeadline(min(time.Now().Add(SendTimeout), deadline)); err != nil {
 		return response{
 			ID:    strm.ID,
-			error: fmt.Errorf("setting write deadline failed with: %s", err),
+			error: fmt.Errorf("setting write deadline failed with: %w", err),
 		}
 	}
 
 	if err := cmd.Encode(strm); err != nil {
 		return response{
 			ID:    strm.ID,
-			error: fmt.Errorf("seding command `%s(%s)` failed with: %s", cmd.Command, c.path, err),
+			error: fmt.Errorf("seding command `%s(%s)` failed with: %w", cmd.Command, c.path, err),
 		}
 	}
 
 	if err := strm.SetReadDeadline(min(time.Now().Add(RecvTimeout), deadline)); err != nil {
 		return response{
 			ID:    strm.ID,
-			error: fmt.Errorf("setting read deadline failed with: %s", err),
+			error: fmt.Errorf("setting read deadline failed with: %w", err),
 		}
 	}
 
@@ -261,7 +262,7 @@ func (c *Client) sendTo(strm stream, deadline time.Time, cmdName string, body co
 	if err != nil {
 		return response{
 			ID:    strm.ID,
-			error: fmt.Errorf("recv response of `%s(%s)` failed with: %s", cmd.Command, c.path, err),
+			error: fmt.Errorf("recv response of `%s(%s)` failed with: %w", cmd.Command, c.path, err),
 		}
 	}
 
@@ -280,7 +281,7 @@ func (c *Client) sendTo(strm stream, deadline time.Time, cmdName string, body co
 
 func (c *Client) send(cmdName string, body command.Body, minStreams int) (<-chan response, error) {
 	now := time.Now()
-	ctx, _ := context.WithDeadline(c.ctx, now.Add(SendToPeerTimeout))
+	ctx, ctxC := context.WithDeadline(c.ctx, now.Add(SendToPeerTimeout))
 	strmDD, _ := ctx.Deadline()
 
 	discPeers := c.discover(ctx)
@@ -323,6 +324,7 @@ func (c *Client) send(cmdName string, body command.Body, minStreams int) (<-chan
 		defer func() {
 			wg.Wait()
 			close(responses)
+			ctxC()
 		}()
 		for strm := range strms {
 			wg.Add(1)
