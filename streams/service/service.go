@@ -27,12 +27,12 @@ func New(peer peer.Node, name string, path string) (*CommandService, error) {
 		return nil, errors.New("not able to create service")
 	}
 
-	cs.router = router.New(cs.stream, nil)
+	cs.router = router.New(cs.stream)
 	if cs.router == nil {
 		return nil, errors.New("not able to create command router")
 	}
 
-	cs.stream.Start(func(s streams.Stream) { cs.router.HandleRaw(s) })
+	cs.stream.Start(func(s streams.Stream) { cs.router.Handle(s) })
 	return &cs, nil
 }
 
@@ -45,5 +45,9 @@ func (cs *CommandService) Router() *(router.Router) {
 }
 
 func (cs *CommandService) Define(command string, handler router.CommandHandler) error {
-	return cs.router.AddStatic(command, handler)
+	return cs.router.AddStatic(command, handler, nil)
+}
+
+func (cs *CommandService) DefineWithUpgrade(command string, std router.CommandHandler, stream router.StreamHandler) error {
+	return cs.router.AddStatic(command, std, stream)
 }

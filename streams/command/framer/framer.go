@@ -29,8 +29,10 @@ func Send(magic [2]byte, version byte, s io.Writer, obj interface{}) error {
 		return err
 	}
 
-	// TODO: make sure we're sending all
-	_, err = s.Write(_obj)
+	n, err := s.Write(_obj)
+	if n != len(_obj) {
+		return errors.New("failed to send framer headers")
+	}
 	return err
 }
 

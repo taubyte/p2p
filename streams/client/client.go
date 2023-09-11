@@ -3,13 +3,13 @@ package client
 import (
 	"context"
 	"fmt"
+	"io"
 	"sync"
 	"time"
 
 	"github.com/pkg/errors"
 	"golang.org/x/exp/slices"
 
-	"github.com/ipfs/go-cid"
 	"github.com/taubyte/p2p/peer"
 	cr "github.com/taubyte/p2p/streams/command/response"
 
@@ -30,10 +30,58 @@ type Client struct {
 	path string
 }
 
-type response struct {
-	peerCore.ID
+type Request struct {
+	client     *Client
+	to         []peerCore.ID
+	cmd        string
+	body       command.Body
+	cmdTimeout time.Duration
+	threshold  int
+	err        error
+}
+
+type Option func(r *Request) error
+
+func Timeout(timeout time.Duration) Option {
+	return func(s *Request) error {
+		s.cmdTimeout = timeout
+		return nil
+	}
+}
+
+func Body(body command.Body) Option {
+	return func(s *Request) error {
+		s.body = body
+		return nil
+	}
+}
+
+func Threshold(threshold int) Option {
+	return func(s *Request) error {
+		s.threshold = threshold
+		return nil
+	}
+}
+
+func To(peers ...peerCore.ID) Option {
+	return func(s *Request) error {
+		s.to = append(s.to, peers...)
+		if s.threshold < len(s.to) {
+			s.threshold = len(s.to)
+		}
+		return nil
+	}
+}
+
+type Response struct {
+	io.ReadWriter
+	pid peerCore.ID
 	cr.Response
 	error
+}
+
+func (r *Response) PID() peerCore.ID {
+	return r.pid
 }
 
 type stream struct {
@@ -50,6 +98,8 @@ var (
 	EstablishStreamTimeout time.Duration = 5 * time.Second
 	SendToPeerTimeout      time.Duration = 10 * time.Second
 
+	MaxStreamsPerSend = 16
+
 	logger log.StandardLogger
 )
 
@@ -61,57 +111,68 @@ func (c *Client) Context() context.Context {
 	return c.ctx
 }
 
-func New(ctx context.Context, node peer.Node, peers []string, path string, min int, max int) (*Client, error) {
+func New(node peer.Node, path string) (*Client, error) {
 	c := &Client{
 		node: node,
 		path: path,
 	}
 
-	c.ctx, c.ctxC = context.WithCancel(ctx)
+	c.ctx, c.ctxC = context.WithCancel(node.Context())
 
 	return c, nil
 }
 
-func (c *Client) SendTo(cid cid.Cid, cmdName string, body command.Body) (cr.Response, error) {
-	cmd := command.New(cmdName, body)
-	pid, err := peerCore.FromCid(cid)
+func (c *Client) New(cmd string, opts ...Option) *Request {
+	r := &Request{
+		client:    c,
+		cmd:       cmd,
+		to:        make([]peerCore.ID, 0),
+		threshold: 1, // default is single send
+	}
+
+	for _, opt := range opts {
+		if err := opt(r); err != nil {
+			r.err = err
+			return r
+		}
+	}
+
+	return r
+}
+
+func (r *Request) Do() (<-chan *Response, error) {
+	if r.err != nil {
+		return nil, r.err
+	}
+
+	strms := make([]stream, 0, r.threshold)
+	if len(r.to) > 0 {
+		for _, pid := range r.to {
+			if len(strms) >= r.threshold {
+				break
+			}
+			strm, err := r.client.openStream(pid)
+			if err != nil {
+				return nil, err
+			}
+			strms = append(strms, strm)
+		}
+	}
+
+	return r.client.send(r.cmd, r.body, strms, r.threshold, r.cmdTimeout)
+}
+
+func (r *Response) Close() {
+	r.ReadWriter.(network.Stream).Reset()
+}
+
+func (c *Client) openStream(pid peerCore.ID) (stream, error) {
+	strm, err := c.node.Peer().NewStream(c.ctx, pid, protocol.ID(c.path))
 	if err != nil {
-		return nil, fmt.Errorf("decoding peer id failed with: %w", err)
+		return stream{}, fmt.Errorf("peer new stream failed with: %w", err)
 	}
 
-	ctx, ctx_close := context.WithTimeout(c.ctx, SendToPeerTimeout)
-	now := time.Now()
-	defer ctx_close()
-
-	strm, err := c.node.Peer().NewStream(ctx, pid, protocol.ID(c.path))
-	if err != nil {
-		return nil, fmt.Errorf("peer new stream failed with: %w", err)
-	}
-	defer strm.Reset()
-
-	if err = strm.SetWriteDeadline(now.Add(SendTimeout)); err != nil {
-		return nil, fmt.Errorf("set write deadline failed with: %w", err)
-	}
-
-	if err = cmd.Encode(strm); err != nil {
-		return nil, fmt.Errorf("encoding command failed with: %w", err)
-	}
-
-	if err = strm.SetReadDeadline(now.Add(RecvTimeout)); err != nil {
-		return nil, fmt.Errorf("set read deadline failed with: %w", err)
-	}
-
-	response, err := cr.Decode(strm)
-	if err != nil {
-		return nil, fmt.Errorf("decoding stream failed with: %w", err)
-	}
-
-	if v, k := response["error"]; k {
-		// return non nil response so we now it's not a network error
-		return cr.Response{}, errors.New(fmt.Sprint(v))
-	}
-
-	return response, nil
+	return stream{Stream: strm, ID: pid}, nil
 }
 
 func min(t0 time.Time, t1 time.Time) time.Time {
@@ -119,43 +180,6 @@ func min(t0 time.Time, t1 time.Time) time.Time {
 		return t0
 	}
 	return t1
-}
-
-func (c *Client) Send(cmdName string, body command.Body) (cr.Response, error) {
-	responses, err := c.send(cmdName, body, 1)
-	if err != nil {
-		return nil, err
-	}
-
-	resp, ok := <-responses
-	if !ok {
-		return nil, errors.New("timeout")
-	}
-
-	if resp.error != nil {
-		return nil, resp.error
-	}
-
-	return resp.Response, nil
-}
-
-func (c *Client) MultiSend(cmdName string, body command.Body, thresh int) (map[peerCore.ID]cr.Response, map[peerCore.ID]error, error) {
-	responses, err := c.send(cmdName, body, thresh)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	rets := make(map[peerCore.ID]cr.Response)
-	errs := make(map[peerCore.ID]error)
-	for resp := range responses {
-		if resp.error != nil {
-			errs[resp.ID] = resp.error
-		} else {
-			rets[resp.ID] = resp.Response
-		}
-	}
-
-	return rets, errs, nil
 }
 
 func (c *Client) discover(ctx context.Context) <-chan peerCore.AddrInfo {
@@ -194,12 +218,13 @@ func (c *Client) discover(ctx context.Context) <-chan peerCore.AddrInfo {
 				return
 			}
 
+			nodeID := c.node.ID()
 			for {
 				select {
 				case <-ctx.Done():
 					return
 				case peer := <-discPeers:
-					if len(peer.ID) > 0 && peer.ID != c.node.ID() {
+					if len(peer.ID) > 0 && peer.ID != nodeID {
 						if len(peer.Addrs) == 0 {
 							peer.Addrs = c.node.Peer().Peerstore().Addrs(peer.ID)
 						}
@@ -225,7 +250,11 @@ func (c *Client) connect(peer peerCore.AddrInfo) (network.Stream, bool, error) {
 		return nil, false, nil
 	}
 
-	strm, err := c.node.Peer().NewStream(network.WithNoDial(c.ctx, "application ensured connection to peer exists"), peer.ID, protocol.ID(c.path))
+	strm, err := c.node.Peer().NewStream(
+		network.WithNoDial(c.ctx, "application ensured connection to peer exists"),
+		peer.ID,
+		protocol.ID(c.path),
+	)
 	if err != nil {
 		logger.Errorf("starting stream to `%s`;`%s` failed with: %w", peer.ID.String(), c.path, err)
 		return nil, false, err
@@ -234,64 +263,87 @@ func (c *Client) connect(peer peerCore.AddrInfo) (network.Stream, bool, error) {
 	return strm, false, nil
 }
 
-func (c *Client) sendTo(strm stream, deadline time.Time, cmdName string, body command.Body) response {
+func (c *Client) sendTo(strm stream, deadline time.Time, cmdName string, body command.Body) *Response {
 	cmd := command.New(cmdName, body)
 
 	if err := strm.SetWriteDeadline(min(time.Now().Add(SendTimeout), deadline)); err != nil {
-		return response{
-			ID:    strm.ID,
-			error: fmt.Errorf("setting write deadline failed with: %w", err),
+		return &Response{
+			ReadWriter: strm.Stream,
+			pid:        strm.ID,
+			error:      fmt.Errorf("setting write deadline failed with: %w", err),
 		}
 	}
 
 	if err := cmd.Encode(strm); err != nil {
-		return response{
-			ID:    strm.ID,
-			error: fmt.Errorf("seding command `%s(%s)` failed with: %w", cmd.Command, c.path, err),
+		return &Response{
+			ReadWriter: strm.Stream,
+			pid:        strm.ID,
+			error:      fmt.Errorf("seding command `%s(%s)` failed with: %w", cmd.Command, c.path, err),
 		}
 	}
 
 	if err := strm.SetReadDeadline(min(time.Now().Add(RecvTimeout), deadline)); err != nil {
-		return response{
-			ID:    strm.ID,
-			error: fmt.Errorf("setting read deadline failed with: %w", err),
+		return &Response{
+			ReadWriter: strm.Stream,
+			pid:        strm.ID,
+			error:      fmt.Errorf("setting read deadline failed with: %w", err),
 		}
 	}
 
 	resp, err := cr.Decode(strm)
 	if err != nil {
-		return response{
-			ID:    strm.ID,
-			error: fmt.Errorf("recv response of `%s(%s)` failed with: %w", cmd.Command, c.path, err),
+		return &Response{
+			ReadWriter: strm.Stream,
+			pid:        strm.ID,
+			error:      fmt.Errorf("recv response of `%s(%s)` failed with: %w", cmd.Command, c.path, err),
 		}
 	}
 
 	if v, k := resp["error"]; k {
-		return response{
-			ID:    strm.ID,
-			error: errors.New(fmt.Sprint(v)),
+		return &Response{
+			ReadWriter: strm.Stream,
+			pid:        strm.ID,
+			error:      errors.New(fmt.Sprint(v)),
 		}
 	}
 
-	return response{
-		ID:       strm.ID,
-		Response: resp,
+	return &Response{
+		ReadWriter: strm.Stream,
+		pid:        strm.ID,
+		Response:   resp,
 	}
 }
 
-func (c *Client) send(cmdName string, body command.Body, minStreams int) (<-chan response, error) {
-	now := time.Now()
-	ctx, ctxC := context.WithDeadline(c.ctx, now.Add(SendToPeerTimeout))
-	strmDD, _ := ctx.Deadline()
+func (c *Client) send(cmdName string, body command.Body, streams []stream, minStreams int, timeout time.Duration) (<-chan *Response, error) {
+	if timeout == 0 {
+		timeout = SendToPeerTimeout
+	}
+
+	if minStreams > MaxStreamsPerSend {
+		return nil, fmt.Errorf("threashold %d exceeds MaxStreamsPerSend", minStreams)
+	}
+
+	ctx, ctxC := context.WithTimeout(c.ctx, timeout)
+	cmdDD, _ := ctx.Deadline()
 
 	discPeers := c.discover(ctx)
 
-	strms := make(chan stream, minStreams)
+	strms := make(chan stream, MaxStreamsPerSend)
 	strmsCount := 0
+
+	if len(streams) > minStreams {
+		streams = streams[:minStreams]
+	}
+
+	for _, strm := range streams {
+		strmsCount++
+		strms <- strm
+	}
+
 	go func() {
 		defer close(strms)
 
-		peers := make(chan peerCore.AddrInfo, 64)
+		peers := make(chan peerCore.AddrInfo, MaxStreamsPerSend)
 		defer close(peers)
 
 		for {
@@ -318,7 +370,7 @@ func (c *Client) send(cmdName string, body command.Body, minStreams int) (<-chan
 		}
 	}()
 
-	responses := make(chan response, minStreams)
+	responses := make(chan *Response, MaxStreamsPerSend)
 	go func() {
 		var wg sync.WaitGroup
 		defer func() {
@@ -330,17 +382,12 @@ func (c *Client) send(cmdName string, body command.Body, minStreams int) (<-chan
 			wg.Add(1)
 			go func(_strm stream) {
 				defer wg.Done()
-				responses <- c.sendTo(_strm, strmDD, cmdName, body)
+				responses <- c.sendTo(_strm, cmdDD, cmdName, body)
 			}(strm)
 		}
 	}()
 
 	return responses, nil
-}
-
-// this command will only fail with a timeout error or out of peers
-func (c *Client) TrySend(cmdName string, body command.Body) (cr.Response, error) {
-	return c.Send(cmdName, body)
 }
 
 func (c *Client) Close() {

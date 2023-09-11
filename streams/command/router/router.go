@@ -3,6 +3,7 @@ package router
 import (
 	"context"
 	"errors"
+	"io"
 
 	"github.com/taubyte/p2p/streams"
 	"github.com/taubyte/p2p/streams/command"
@@ -11,24 +12,23 @@ import (
 )
 
 type CommandHandler func(context.Context, streams.Connection, command.Body) (cr.Response, error)
+type StreamHandler func(context.Context, io.ReadWriter)
 
-type RouteHandler func(command string) CommandHandler
+type handlers struct {
+	std    CommandHandler
+	stream StreamHandler
+}
 
 type Router struct {
 	svr          *streams.StreamManger
-	staticRoutes map[string]CommandHandler
-	routeHandler RouteHandler
+	staticRoutes map[string]handlers
 }
 
-func New(svr *streams.StreamManger, routeHandler RouteHandler) *Router {
-	if routeHandler == nil {
-		routeHandler = NilRouteHandler
-	}
-
-	return &Router{svr: svr, staticRoutes: map[string]CommandHandler{}, routeHandler: routeHandler}
+func New(svr *streams.StreamManger) *Router {
+	return &Router{svr: svr, staticRoutes: map[string]handlers{}}
 }
 
-func (r *Router) AddStatic(command string, handler CommandHandler) error {
+func (r *Router) AddStatic(command string, handler CommandHandler, stream StreamHandler) error {
 	if handler == nil {
 		return errors.New("can not add nil handler")
 	}
@@ -37,47 +37,53 @@ func (r *Router) AddStatic(command string, handler CommandHandler) error {
 		return errors.New("Command `" + command + "` already exists.")
 	}
 
-	r.staticRoutes[command] = handler
+	r.staticRoutes[command] = handlers{
+		std:    handler,
+		stream: stream,
+	}
 	return nil
 }
 
-func (r *Router) Handle(cmd *command.Command) (cr.Response, error) {
+func (r *Router) handle(cmd *command.Command) (cr.Response, StreamHandler, error) {
 	if cmd == nil {
-		return nil, errors.New("empty command")
+		return nil, nil, errors.New("empty command")
 	}
 
 	conn, err := cmd.Connection()
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	if handler, ok := r.staticRoutes[cmd.Command]; ok {
-		return handler(r.svr.Context(), conn, cmd.Body)
+	if _handlers, ok := r.staticRoutes[cmd.Command]; ok {
+		ret, err := _handlers.std(r.svr.Context(), conn, cmd.Body)
+		return ret, _handlers.stream, err
 	}
 
-	if handler := r.routeHandler(cmd.Command); handler != nil {
-		return handler(r.svr.Context(), conn, cmd.Body)
-	}
-
-	return nil, errors.New("command `" + cmd.Command + "` does not exist.")
+	return nil, nil, errors.New("command `" + cmd.Command + "` does not exist.")
 }
 
-func (r *Router) HandleRaw(s streams.Stream) {
+func (r *Router) Handle(s streams.Stream) {
 	defer s.Close()
+
 	c, err := command.Decode(s.Conn(), s)
 	if err != nil {
 		ce.Encode(s, err)
 		return
 	}
 
-	creturn, err := r.Handle(c)
+	creturn, upgrade, err := r.handle(c)
 	if err != nil {
 		ce.Encode(s, err)
 		return
 	}
 
-	if err = creturn.Encode(s); err != nil {
+	err = creturn.Encode(s)
+	if err != nil {
 		ce.Encode(s, err)
+		return
 	}
 
+	if upgrade != nil {
+		upgrade(r.svr.Context(), s)
+	}
 }
