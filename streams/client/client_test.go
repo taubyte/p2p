@@ -220,7 +220,7 @@ func TestClientUpgrade(t *testing.T) {
 		return
 	}
 	defer svr.Stop()
-	err = svr.DefineWithUpgrade(
+	err = svr.DefineStream(
 		"hi",
 		func(context.Context, streams.Connection, command.Body) (cr.Response, error) {
 			return cr.Response{"message": "HI"}, nil
@@ -252,7 +252,7 @@ func TestClientUpgrade(t *testing.T) {
 		return
 	}
 
-	err = svr.DefineWithUpgrade(
+	err = svr.DefineStream(
 		"hi2",
 		func(context.Context, streams.Connection, command.Body) (cr.Response, error) {
 			return nil, nil
@@ -270,7 +270,7 @@ func TestClientUpgrade(t *testing.T) {
 		return
 	}
 
-	err = svr.DefineWithUpgrade(
+	err = svr.DefineStream(
 		"hi3",
 		func(context.Context, streams.Connection, command.Body) (cr.Response, error) {
 			return nil, nil

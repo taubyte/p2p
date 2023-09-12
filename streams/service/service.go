@@ -48,6 +48,6 @@ func (cs *CommandService) Define(command string, handler router.CommandHandler) 
 	return cs.router.AddStatic(command, handler, nil)
 }
 
-func (cs *CommandService) DefineWithUpgrade(command string, std router.CommandHandler, stream router.StreamHandler) error {
+func (cs *CommandService) DefineStream(command string, std router.CommandHandler, stream router.StreamHandler) error {
 	return cs.router.AddStatic(command, std, stream)
 }
