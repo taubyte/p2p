@@ -77,7 +77,11 @@ type Response struct {
 	io.ReadWriter
 	pid peerCore.ID
 	cr.Response
-	error
+	err error
+}
+
+func (r *Response) Error() error {
+	return r.err
 }
 
 func (r *Response) PID() peerCore.ID {
@@ -270,7 +274,7 @@ func (c *Client) sendTo(strm stream, deadline time.Time, cmdName string, body co
 		return &Response{
 			ReadWriter: strm.Stream,
 			pid:        strm.ID,
-			error:      fmt.Errorf("setting write deadline failed with: %w", err),
+			err:        fmt.Errorf("setting write deadline failed with: %w", err),
 		}
 	}
 
@@ -278,7 +282,7 @@ func (c *Client) sendTo(strm stream, deadline time.Time, cmdName string, body co
 		return &Response{
 			ReadWriter: strm.Stream,
 			pid:        strm.ID,
-			error:      fmt.Errorf("seding command `%s(%s)` failed with: %w", cmd.Command, c.path, err),
+			err:        fmt.Errorf("seding command `%s(%s)` failed with: %w", cmd.Command, c.path, err),
 		}
 	}
 
@@ -286,7 +290,7 @@ func (c *Client) sendTo(strm stream, deadline time.Time, cmdName string, body co
 		return &Response{
 			ReadWriter: strm.Stream,
 			pid:        strm.ID,
-			error:      fmt.Errorf("setting read deadline failed with: %w", err),
+			err:        fmt.Errorf("setting read deadline failed with: %w", err),
 		}
 	}
 
@@ -295,7 +299,7 @@ func (c *Client) sendTo(strm stream, deadline time.Time, cmdName string, body co
 		return &Response{
 			ReadWriter: strm.Stream,
 			pid:        strm.ID,
-			error:      fmt.Errorf("recv response of `%s(%s)` failed with: %w", cmd.Command, c.path, err),
+			err:        fmt.Errorf("recv response of `%s(%s)` failed with: %w", cmd.Command, c.path, err),
 		}
 	}
 
@@ -303,7 +307,7 @@ func (c *Client) sendTo(strm stream, deadline time.Time, cmdName string, body co
 		return &Response{
 			ReadWriter: strm.Stream,
 			pid:        strm.ID,
-			error:      errors.New(fmt.Sprint(v)),
+			err:        errors.New(fmt.Sprint(v)),
 		}
 	}
 
