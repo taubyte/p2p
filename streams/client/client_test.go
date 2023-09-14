@@ -234,6 +234,7 @@ func TestClientUpgrade(t *testing.T) {
 				default:
 					n, err := rw.Read(buf)
 					if n > 0 {
+						fmt.Println("hi", string(buf[:n]))
 						_, err := rw.Write([]byte(strings.ToUpper(string(buf[:n]))))
 						if err != nil {
 							return
@@ -284,6 +285,7 @@ func TestClientUpgrade(t *testing.T) {
 				default:
 					n, err := rw.Read(buf)
 					if n > 0 {
+						fmt.Println("HI3:", string(buf[:n]))
 						rw.Write([]byte(strings.ToUpper(string(buf[:n]))))
 					}
 					if err != nil {
@@ -576,7 +578,7 @@ func TestClientMultiSend(t *testing.T) {
 
 	for r := range resCh {
 		if m, err := r.Get("message"); err != nil || m.(string) != "HI" {
-			t.Errorf("node %s returned bad response `%s`", r.PID().Pretty(), r)
+			t.Errorf("node %s returned bad response `%v`", r.PID().Pretty(), r)
 			r.Close()
 			return
 		}

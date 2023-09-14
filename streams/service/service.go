@@ -1,10 +1,13 @@
 package service
 
 import (
+	"context"
 	"errors"
 
 	"github.com/taubyte/p2p/peer"
 	"github.com/taubyte/p2p/streams"
+	"github.com/taubyte/p2p/streams/command"
+	cr "github.com/taubyte/p2p/streams/command/response"
 	"github.com/taubyte/p2p/streams/command/router"
 )
 
@@ -50,4 +53,8 @@ func (cs *CommandService) Define(command string, handler router.CommandHandler) 
 
 func (cs *CommandService) DefineStream(command string, std router.CommandHandler, stream router.StreamHandler) error {
 	return cs.router.AddStatic(command, std, stream)
+}
+
+func NoOpCommandHandler(context.Context, streams.Connection, command.Body) (cr.Response, error) {
+	return nil, nil
 }
