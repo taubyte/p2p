@@ -71,9 +71,10 @@ func TestSingleBackend(t *testing.T) {
 				t.Error(err)
 				return
 			}
-			defer w.WriteHeader(200) // default to 200
+			//defer
 
-			w.Header().Set("X-TestHeader", "ok")
+			w.Header().Set("X-XSS-Protection", "0")
+			w.WriteHeader(200) // default to 200
 
 			buf := make([]byte, 1024)
 			defer r.Body.Close()
@@ -81,9 +82,10 @@ func TestSingleBackend(t *testing.T) {
 				n, err := r.Body.Read(buf)
 				if n > 0 {
 					upper := strings.ToUpper(string(buf[:n]))
-					n, err = w.Write([]byte(upper))
+					_, err = w.Write([]byte(upper))
 				}
 				if err != nil {
+					fmt.Println(err)
 					break
 				}
 			}
@@ -116,7 +118,7 @@ func TestSingleBackend(t *testing.T) {
 		return
 	}
 
-	go http.ListenAndServe("127.0.0.1:2222", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	go http.ListenAndServe(fmt.Sprintf("127.0.0.1:%d", n+10), http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		c, err := client.New(p2, "/gw/1.0")
 		if err != nil {
 			t.Error(err)
@@ -146,23 +148,26 @@ func TestSingleBackend(t *testing.T) {
 			return
 		}
 
+		fmt.Println("+++")
 		err = Frontend(w, r, res)
 		if err != nil {
 			t.Error(err)
 		}
+		fmt.Println("+++")
 	}))
 
 	time.Sleep(3 * time.Second)
 
+	msg := "hello y'all - "
 	var str string
-	for i := 0; i < 100; i++ {
-		str += "hello y'all - "
+	for i := 0; i < 15*1024*1024/len(msg); i++ {
+		str += msg
 	}
 
 	upper := strings.ToUpper(str)
 	buf := bytes.NewBuffer([]byte(str))
 
-	req, err := http.NewRequest("POST", "http://127.0.0.1:2222", buf)
+	req, err := http.NewRequest("POST", fmt.Sprintf("http://127.0.0.1:%d", n+10), buf)
 	if err != nil {
 		t.Error(err)
 		return
@@ -185,7 +190,9 @@ func TestSingleBackend(t *testing.T) {
 		return
 	}
 
-	fmt.Println(string(resBuf))
+	fmt.Println(res)
+
+	//fmt.Println(string(resBuf))
 
 	if string(resBuf) != upper {
 		t.Error("response does not match")

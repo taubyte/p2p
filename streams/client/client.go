@@ -291,6 +291,7 @@ func (c *Client) sendTo(strm stream, deadline time.Time, cmdName string, body co
 			err:        fmt.Errorf("setting write deadline failed with: %w", err),
 		}
 	}
+	defer strm.SetWriteDeadline(time.Time{})
 
 	if err := cmd.Encode(strm); err != nil {
 		return &Response{
@@ -307,6 +308,7 @@ func (c *Client) sendTo(strm stream, deadline time.Time, cmdName string, body co
 			err:        fmt.Errorf("setting read deadline failed with: %w", err),
 		}
 	}
+	defer strm.SetReadDeadline(time.Time{})
 
 	resp, err := cr.Decode(strm)
 	if err != nil {

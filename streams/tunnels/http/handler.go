@@ -24,9 +24,7 @@ const (
 )
 
 var (
-	DefaultBufferSize = 4 * 1024
-
-	BodyStreamBufferSize = 1024
+	BodyStreamBufferSize = 4 * 1024
 
 	ErrNotBody = errors.New("payload not body")
 )
@@ -48,6 +46,7 @@ func newBodyReader(p packer.Packer, ch packer.Channel, strm io.Reader) io.ReadCl
 }
 
 func (b *bodyReader) Close() error {
+	//TODO: send close to frontend
 	return nil
 }
 
@@ -71,8 +70,10 @@ func (b *bodyReader) Read(p []byte) (n int, err error) {
 		ch packer.Channel
 		l  int64
 	)
+
 	ch, l, err = b.packer.Next(b.stream)
 	if err != nil {
+		b.err = err
 		return
 	}
 
@@ -201,13 +202,9 @@ func requestToStream(stream io.Writer, r *http.Request) error {
 	}
 
 	if r.Body != nil {
-		defer r.Body.Close()
-		buf := make([]byte, BodyStreamBufferSize)
-		//err =
-		pack.Stream(BodyOp, stream, r.Body, buf)
-		// if err != io.EOF {
-		// 	return err
-		// }
+		err := pack.Stream(BodyOp, stream, r.Body, make([]byte, BodyStreamBufferSize))
+		fmt.Println(">>", err)
+		r.Body.Close()
 	}
 
 	return nil
@@ -221,12 +218,10 @@ func headersOp(w http.ResponseWriter, r io.Reader) error {
 		return err
 	}
 
-	curHeader := w.Header()
-
 	// delete
-	for k := range curHeader {
+	for k := range w.Header() {
 		if _, ok := obj.Headers[k]; !ok {
-			curHeader.Del(k)
+			w.Header().Del(k)
 		}
 	}
 
@@ -234,9 +229,9 @@ func headersOp(w http.ResponseWriter, r io.Reader) error {
 	for k, v := range obj.Headers {
 		for i := 0; i < len(v); i++ {
 			if i == 0 {
-				curHeader.Set(k, v[i])
+				w.Header().Set(k, v[i])
 			} else {
-				curHeader.Add(k, v[i])
+				w.Header().Add(k, v[i])
 			}
 		}
 	}

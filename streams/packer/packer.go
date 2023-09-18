@@ -146,8 +146,17 @@ func (p *packer) Send(channel Channel, w io.Writer, r io.Reader, length int64) e
 // will stream till Error or EOF
 // TODO: implement a writer
 func (p *packer) Stream(channel Channel, w io.Writer, r io.Reader, buf []byte) error {
+	var (
+		err error
+		n   int
+	)
+	defer func() {
+		err = p.SendClose(channel, w, err)
+	}()
+
 	for {
-		n, err := r.Read(buf)
+		n, err = r.Read(buf)
+		fmt.Println("---", n, err)
 		if n > 0 {
 			err := p.Send(channel, w, bytes.NewBuffer(buf), int64(n))
 			if err != nil {
@@ -155,19 +164,18 @@ func (p *packer) Stream(channel Channel, w io.Writer, r io.Reader, buf []byte) e
 			}
 		}
 		if err != nil {
-			p.SendClose(channel, w, err)
-			return fmt.Errorf("failed to send close body %w", err)
+			return fmt.Errorf("stream ended with %w", err)
 		}
 	}
 }
 
 func (p *packer) SendClose(channel Channel, w io.Writer, err error) error {
 	var buf bytes.Buffer
-	if err != io.EOF {
+	if err != nil && err != io.EOF {
 		buf.WriteString(err.Error())
 	}
 
-	return p.send(channel, TypeData, w, &buf, int64(buf.Len()))
+	return p.send(channel, TypeClose, w, &buf, int64(buf.Len()))
 }
 
 func (p *packer) Recv(r io.Reader, w io.Writer) (Channel, int64, error) {
