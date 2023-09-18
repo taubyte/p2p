@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"io"
 )
 
@@ -148,14 +149,14 @@ func (p *packer) Stream(channel Channel, w io.Writer, r io.Reader, buf []byte) e
 	for {
 		n, err := r.Read(buf)
 		if n > 0 {
-			err = p.Send(channel, w, bytes.NewBuffer(buf), int64(n))
+			err := p.Send(channel, w, bytes.NewBuffer(buf), int64(n))
 			if err != nil {
-				return err
+				return fmt.Errorf("failed to send body payload with %w", err)
 			}
 		}
 		if err != nil {
 			p.SendClose(channel, w, err)
-			return err
+			return fmt.Errorf("failed to send close body %w", err)
 		}
 	}
 }

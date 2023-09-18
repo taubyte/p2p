@@ -203,10 +203,11 @@ func requestToStream(stream io.Writer, r *http.Request) error {
 	if r.Body != nil {
 		defer r.Body.Close()
 		buf := make([]byte, BodyStreamBufferSize)
-		err = pack.Stream(BodyOp, stream, r.Body, buf)
-		if err != io.EOF {
-			return err
-		}
+		//err =
+		pack.Stream(BodyOp, stream, r.Body, buf)
+		// if err != io.EOF {
+		// 	return err
+		// }
 	}
 
 	return nil

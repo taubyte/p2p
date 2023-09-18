@@ -135,6 +135,7 @@ func TestSingleBackend(t *testing.T) {
 			return
 		}
 		defer res.Close()
+
 		if err := res.Error(); err != nil {
 			t.Errorf("error %s", err.Error())
 			return
