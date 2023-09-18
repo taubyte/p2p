@@ -83,7 +83,6 @@ func (p *node) cleanup() error {
 		if err := p.store.Close(); err != nil {
 			return err
 		}
-		//fmt.Println(" - STORE")
 	}
 	if p.ephemeral_repo_path {
 		os.RemoveAll(p.repo_path)
