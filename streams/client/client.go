@@ -305,7 +305,7 @@ func (c *Client) sendTo(strm stream, deadline time.Time, cmdName string, body co
 		return &Response{
 			ReadWriter: rw,
 			pid:        strm.ID,
-			err:        fmt.Errorf("seding command `%s(%s)` failed with: %w", cmd.Command, c.path, err),
+			err:        fmt.Errorf("sending command `%s(%s)` failed with: %w", cmd.Command, c.path, err),
 		}
 	}
 
@@ -323,7 +323,7 @@ func (c *Client) sendTo(strm stream, deadline time.Time, cmdName string, body co
 		return &Response{
 			ReadWriter: rw,
 			pid:        strm.ID,
-			err:        fmt.Errorf("recv response of `%s(%s)` failed with: %w", cmd.Command, c.path, err),
+			err:        fmt.Errorf("receive response of `%s(%s)` failed with: %w", cmd.Command, c.path, err),
 		}
 	}
 

@@ -39,7 +39,7 @@ func New(magic Magic, version Version) Packer {
 	return p
 }
 
-func (p *packer) send(channel Channel, _type Type, w io.Writer, r io.Reader, length int64) error {
+func (p packer) send(channel Channel, _type Type, w io.Writer, r io.Reader, length int64) error {
 	_, err := w.Write(p.magic[:])
 	if err != nil {
 		return err
@@ -79,11 +79,11 @@ func (p *packer) send(channel Channel, _type Type, w io.Writer, r io.Reader, len
 	return nil
 }
 
-func (p *packer) Send(channel Channel, w io.Writer, r io.Reader, length int64) error {
+func (p packer) Send(channel Channel, w io.Writer, r io.Reader, length int64) error {
 	return p.send(channel, TypeData, w, r, length)
 }
 
-func (p *packer) Stream(channel Channel, w io.Writer, r io.Reader, bufSize int) (int64, error) {
+func (p packer) Stream(channel Channel, w io.Writer, r io.Reader, bufSize int) (int64, error) {
 	var (
 		err error
 		n   int
@@ -115,7 +115,7 @@ func (p *packer) Stream(channel Channel, w io.Writer, r io.Reader, bufSize int) 
 
 }
 
-func (p *packer) SendClose(channel Channel, w io.Writer, err error) error {
+func (p packer) SendClose(channel Channel, w io.Writer, err error) error {
 	var buf bytes.Buffer
 	if err != nil && err != io.EOF {
 		buf.WriteString(err.Error())
@@ -124,7 +124,7 @@ func (p *packer) SendClose(channel Channel, w io.Writer, err error) error {
 	return p.send(channel, TypeClose, w, &buf, int64(buf.Len()))
 }
 
-func (p *packer) Recv(r io.Reader, w io.Writer) (Channel, int64, error) {
+func (p packer) Recv(r io.Reader, w io.Writer) (Channel, int64, error) {
 	_magic := make([]byte, 2)
 	_, err := r.Read(_magic)
 	if err != nil {
@@ -181,7 +181,7 @@ func (p *packer) Recv(r io.Reader, w io.Writer) (Channel, int64, error) {
 }
 
 // read next headers
-func (p *packer) Next(r io.Reader) (Channel, int64, error) {
+func (p packer) Next(r io.Reader) (Channel, int64, error) {
 	_magic := make([]byte, 2)
 	_, err := r.Read(_magic)
 	if err != nil {
