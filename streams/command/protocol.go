@@ -1,10 +1,13 @@
 package command
 
-import "github.com/taubyte/p2p/streams"
+import (
+	"github.com/taubyte/p2p/streams"
+	"github.com/taubyte/p2p/streams/packer"
+)
 
 var (
-	Magic   = [2]byte{0x01, 0xec}
-	Version = byte(0x01)
+	Magic   = packer.Magic{0x01, 0xec}
+	Version = packer.Version(0x01)
 )
 
 type Body map[string]interface{}

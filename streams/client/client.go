@@ -94,6 +94,26 @@ type stream struct {
 	peerCore.ID
 }
 
+type streamAsReadWriter struct {
+	io.ReadWriter
+}
+
+func (rw streamAsReadWriter) Read(p []byte) (int, error) {
+	n, err := rw.ReadWriter.Read(p)
+	if err == network.ErrReset {
+		err = io.EOF
+	}
+	return n, err
+}
+
+func (rw streamAsReadWriter) Write(p []byte) (int, error) {
+	n, err := rw.ReadWriter.Write(p)
+	if err == network.ErrReset {
+		err = io.ErrClosedPipe
+	}
+	return n, err
+}
+
 var (
 	NumConnectTries        int           = 3
 	NumStreamers           int           = 3
@@ -168,7 +188,7 @@ func (r *Request) Do() (<-chan *Response, error) {
 }
 
 func (r *Response) Close() {
-	r.ReadWriter.(network.Stream).Reset()
+	r.ReadWriter.(streamAsReadWriter).ReadWriter.(network.Stream).Reset()
 }
 
 func (c *Client) openStream(pid peerCore.ID) (stream, error) {
@@ -270,50 +290,53 @@ func (c *Client) connect(peer peerCore.AddrInfo) (network.Stream, bool, error) {
 
 func (c *Client) sendTo(strm stream, deadline time.Time, cmdName string, body command.Body) *Response {
 	cmd := command.New(cmdName, body)
+	rw := streamAsReadWriter{strm.Stream}
 
 	if err := strm.SetWriteDeadline(min(time.Now().Add(SendTimeout), deadline)); err != nil {
 		return &Response{
-			ReadWriter: strm.Stream,
+			ReadWriter: rw,
 			pid:        strm.ID,
 			err:        fmt.Errorf("setting write deadline failed with: %w", err),
 		}
 	}
+	defer strm.SetWriteDeadline(time.Time{})
 
 	if err := cmd.Encode(strm); err != nil {
 		return &Response{
-			ReadWriter: strm.Stream,
+			ReadWriter: rw,
 			pid:        strm.ID,
-			err:        fmt.Errorf("seding command `%s(%s)` failed with: %w", cmd.Command, c.path, err),
+			err:        fmt.Errorf("sending command `%s(%s)` failed with: %w", cmd.Command, c.path, err),
 		}
 	}
 
 	if err := strm.SetReadDeadline(min(time.Now().Add(RecvTimeout), deadline)); err != nil {
 		return &Response{
-			ReadWriter: strm.Stream,
+			ReadWriter: rw,
 			pid:        strm.ID,
 			err:        fmt.Errorf("setting read deadline failed with: %w", err),
 		}
 	}
+	defer strm.SetReadDeadline(time.Time{})
 
 	resp, err := cr.Decode(strm)
 	if err != nil {
 		return &Response{
-			ReadWriter: strm.Stream,
+			ReadWriter: rw,
 			pid:        strm.ID,
-			err:        fmt.Errorf("recv response of `%s(%s)` failed with: %w", cmd.Command, c.path, err),
+			err:        fmt.Errorf("receive response of `%s(%s)` failed with: %w", cmd.Command, c.path, err),
 		}
 	}
 
 	if v, k := resp["error"]; k {
 		return &Response{
-			ReadWriter: strm.Stream,
+			ReadWriter: rw,
 			pid:        strm.ID,
 			err:        errors.New(fmt.Sprint(v)),
 		}
 	}
 
 	return &Response{
-		ReadWriter: strm.Stream,
+		ReadWriter: rw,
 		pid:        strm.ID,
 		Response:   resp,
 	}

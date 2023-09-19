@@ -109,8 +109,12 @@ func TestClientSend(t *testing.T) {
 		} else {
 			res := <-resCh
 			defer res.Close()
+			if err := res.Error(); err != nil {
+				t.Errorf("error %s", err.Error())
+				return
+			}
 			if v, err := res.Get("message"); err != nil || v.(string) != "HI" {
-				t.Errorf("Provider response does not match %v", res)
+				t.Errorf("Provider response does not match %v", v)
 				return
 			}
 		}
@@ -123,8 +127,12 @@ func TestClientSend(t *testing.T) {
 		} else {
 			res := <-resCh
 			defer res.Close()
+			if err := res.Error(); err != nil {
+				t.Errorf("error %s", err.Error())
+				return
+			}
 			if v, err := res.Get("message"); err != nil || v.(string) != "back" {
-				t.Errorf("Provider response does not match %v", res)
+				t.Errorf("Provider response does not match %v", v)
 				return
 			}
 		}
@@ -144,8 +152,12 @@ func TestClientSend(t *testing.T) {
 		} else {
 			res := <-resCh
 			defer res.Close()
+			if err := res.Error(); err != nil {
+				t.Errorf("error %s", err.Error())
+				return
+			}
 			if v, err := res.Get("message"); err != nil || v.(string) != bigMessage {
-				t.Errorf("Provider response does not match %v", res)
+				t.Errorf("Provider response does not match %v", v)
 				return
 			}
 		}
@@ -174,8 +186,12 @@ func TestClientSend(t *testing.T) {
 		} else {
 			res := <-resCh
 			defer res.Close()
+			if err := res.Error(); err != nil {
+				t.Errorf("error %s", err.Error())
+				return
+			}
 			if v, err := res.Get("message"); err != nil || v.(string) != "HI" {
-				t.Errorf("Provider response does not match %#v", res)
+				t.Errorf("Provider response does not match %v", v)
 				return
 			}
 		}
@@ -339,9 +355,13 @@ func TestClientUpgrade(t *testing.T) {
 			return
 		}
 		defer res.Close()
+		if err := res.Error(); err != nil {
+			t.Errorf("error %s", err.Error())
+			return
+		}
 
 		if v, k := res.Get("message"); k != nil || v.(string) != "HI" {
-			t.Errorf("provider response does not match %v", res)
+			t.Errorf("provider response does not match %v", v)
 			return
 		}
 
@@ -376,6 +396,10 @@ func TestClientUpgrade(t *testing.T) {
 			return
 		}
 		defer res2.Close()
+		if err := res2.Error(); err != nil {
+			t.Errorf("error %s", err.Error())
+			return
+		}
 
 		str = "Yo!"
 		if _, err := res2.Write([]byte(str)); err != nil {
@@ -413,6 +437,11 @@ func TestClientUpgrade(t *testing.T) {
 			return
 		}
 		defer res3.Close()
+
+		if err := res3.Error(); err != nil {
+			t.Errorf("error %s", err.Error())
+			return
+		}
 
 		// command with big argument
 		bigMessageBase := "1234567890qwertyuiopasdfghjklzxcvbnm1234567890qwertyuiopasdfghjklzxcvbnm"
@@ -575,8 +604,12 @@ func TestClientMultiSend(t *testing.T) {
 	count := 0
 
 	for r := range resCh {
+		if err := r.Error(); err != nil {
+			t.Errorf("error %s", err.Error())
+			return
+		}
 		if m, err := r.Get("message"); err != nil || m.(string) != "HI" {
-			t.Errorf("node %s returned bad response `%s`", r.PID().Pretty(), r)
+			t.Errorf("node %s returned bad response `%v`", r.PID().Pretty(), m)
 			r.Close()
 			return
 		}
