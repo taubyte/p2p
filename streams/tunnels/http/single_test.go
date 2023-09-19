@@ -71,12 +71,11 @@ func TestSingleBackend(t *testing.T) {
 				t.Error(err)
 				return
 			}
-			//defer
 
 			w.Header().Set("X-XSS-Protection", "0")
-			w.WriteHeader(200) // default to 200
+			w.WriteHeader(200)
 
-			buf := make([]byte, 1024)
+			buf := make([]byte, 4*1024)
 			defer r.Body.Close()
 			for {
 				n, err := r.Body.Read(buf)
@@ -85,7 +84,6 @@ func TestSingleBackend(t *testing.T) {
 					_, err = w.Write([]byte(upper))
 				}
 				if err != nil {
-					fmt.Println(err)
 					break
 				}
 			}
@@ -118,12 +116,13 @@ func TestSingleBackend(t *testing.T) {
 		return
 	}
 
+	c, err := client.New(p2, "/gw/1.0")
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
 	go http.ListenAndServe(fmt.Sprintf("127.0.0.1:%d", n+10), http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		c, err := client.New(p2, "/gw/1.0")
-		if err != nil {
-			t.Error(err)
-			return
-		}
 
 		respCh, err := c.New("tun", client.To(p1.ID())).Do()
 		if err != nil {
@@ -148,20 +147,19 @@ func TestSingleBackend(t *testing.T) {
 			return
 		}
 
-		fmt.Println("+++")
 		err = Frontend(w, r, res)
 		if err != nil {
 			t.Error(err)
 		}
-		fmt.Println("+++")
 	}))
 
 	time.Sleep(3 * time.Second)
 
-	msg := "hello y'all - "
+	msg := "a%08db"
 	var str string
-	for i := 0; i < 15*1024*1024/len(msg); i++ {
-		str += msg
+	multiple := 1024 * 1024 / len(msg)
+	for i := 0; i < multiple; i++ {
+		str += fmt.Sprintf(msg, i)
 	}
 
 	upper := strings.ToUpper(str)
@@ -190,11 +188,12 @@ func TestSingleBackend(t *testing.T) {
 		return
 	}
 
-	fmt.Println(res)
+	resStr := string(resBuf)
+	for i := 0; i < len(resStr); i++ {
+		if resStr[i] != upper[i] {
+			t.Error("response does not match", i)
+			break
+		}
 
-	//fmt.Println(string(resBuf))
-
-	if string(resBuf) != upper {
-		t.Error("response does not match")
 	}
 }

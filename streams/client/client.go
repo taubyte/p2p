@@ -106,6 +106,14 @@ func (rw streamAsReadWriter) Read(p []byte) (int, error) {
 	return n, err
 }
 
+func (rw streamAsReadWriter) Write(p []byte) (int, error) {
+	n, err := rw.ReadWriter.Write(p)
+	if err == network.ErrReset {
+		err = io.ErrClosedPipe
+	}
+	return n, err
+}
+
 var (
 	NumConnectTries        int           = 3
 	NumStreamers           int           = 3

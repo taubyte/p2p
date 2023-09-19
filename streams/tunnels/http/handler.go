@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"sync"
 
 	"github.com/fxamacker/cbor/v2"
 	"github.com/taubyte/p2p/streams/packer"
@@ -26,7 +25,7 @@ const (
 var (
 	BodyStreamBufferSize = 4 * 1024
 
-	ErrNotBody = errors.New("payload not body")
+	ErrNotBody = errors.New("payload not an http body")
 )
 
 type bodyReader struct {
@@ -35,6 +34,7 @@ type bodyReader struct {
 	pre    io.Reader
 	err    error
 	stream io.Reader
+	len    int
 }
 
 func newBodyReader(p packer.Packer, ch packer.Channel, strm io.Reader) io.ReadCloser {
@@ -51,6 +51,10 @@ func (b *bodyReader) Close() error {
 }
 
 func (b *bodyReader) Read(p []byte) (n int, err error) {
+	defer func() {
+		b.len += n
+	}()
+
 	if b.err != nil {
 		n, err = b.pre.Read(p)
 		if err != nil { // only EOF is possible here
@@ -129,25 +133,16 @@ func Backend(stream io.ReadWriter) (http.ResponseWriter, *http.Request, error) {
 // HTTP -> Stream
 func Frontend(w http.ResponseWriter, r *http.Request, stream io.ReadWriter) error {
 	var (
-		wg        sync.WaitGroup
 		exitError error
 	)
 
 	cont := true
-	wg.Add(2)
+	done := make(chan struct{})
 
 	go func() {
-		defer wg.Done()
-		err := requestToStream(stream, r)
-		if err != nil {
-			cont = false
-			exitError = fmt.Errorf("request stream failed with %w", err)
-			return
-		}
-	}()
-
-	go func() {
-		defer wg.Done()
+		defer func() {
+			done <- struct{}{}
+		}()
 		pack := packer.New(Magic, Version)
 
 		for cont {
@@ -181,33 +176,38 @@ func Frontend(w http.ResponseWriter, r *http.Request, stream io.ReadWriter) erro
 		}
 	}()
 
-	wg.Wait()
+	_, _, err := requestToStream(stream, r)
+	if err != nil {
+		cont = false
+		exitError = fmt.Errorf("request stream failed with %w", err)
+		return exitError
+	}
+
+	<-done
 
 	return exitError
 }
 
-func requestToStream(stream io.Writer, r *http.Request) error {
+func requestToStream(stream io.Writer, r *http.Request) (int64, int64, error) {
 	pack := packer.New(Magic, Version)
 
 	rpayload := requestToPayload(r)
 
 	rpbuf, err := rpayload.Encode()
 	if err != nil {
-		return err
+		return 0, 0, err
 	}
 
-	err = pack.Send(RequestOp, stream, bytes.NewBuffer(rpbuf), int64(len(rpbuf)))
+	hdrlen := int64(len(rpbuf))
+	err = pack.Send(RequestOp, stream, bytes.NewBuffer(rpbuf), hdrlen)
 	if err != nil {
-		return err
+		return 0, 0, err
 	}
 
-	if r.Body != nil {
-		err := pack.Stream(BodyOp, stream, r.Body, make([]byte, BodyStreamBufferSize))
-		fmt.Println(">>", err)
-		r.Body.Close()
-	}
+	bodylen, _ := pack.Stream(BodyOp, stream, r.Body, BodyStreamBufferSize)
+	r.Body.Close()
 
-	return nil
+	return hdrlen, bodylen, nil
 }
 
 func headersOp(w http.ResponseWriter, r io.Reader) error {

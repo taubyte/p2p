@@ -18,10 +18,6 @@ const (
 	TypeClose
 )
 
-// var (
-// 	PacketBufferSize = 16
-// )
-
 type Magic [2]byte
 type Channel uint8
 type Type uint8
@@ -29,7 +25,7 @@ type Version uint16
 
 type Packer interface {
 	Send(Channel, io.Writer, io.Reader, int64) error
-	Stream(Channel, io.Writer, io.Reader, []byte) error
+	Stream(Channel, io.Writer, io.Reader, int) (int64, error)
 	Recv(io.Reader, io.Writer) (Channel, int64, error)
 	Next(r io.Reader) (Channel, int64, error)
 }
@@ -87,86 +83,36 @@ func (p *packer) Send(channel Channel, w io.Writer, r io.Reader, length int64) e
 	return p.send(channel, TypeData, w, r, length)
 }
 
-// type reader struct {
-// 	p       packer
-// 	stream  io.Reader
-// 	channel Channel
-// 	payload io.Reader
-// 	err     error
-// }
-
-// func (p *reader) Read(b []byte) (int, error) {
-// 	if p.err != nil {
-// 		return 0, p.err
-// 	}
-
-// 	var (
-// 		n    int
-// 		err  error
-// 		more bool
-// 	)
-
-// 	if p.payload == nil {
-// 		more = true
-// 	} else {
-// 		n, err = p.payload.Read(b)
-// 		more = (err == io.EOF && n == 0)
-// 	}
-
-// 	if more {
-// 		for { //look for the next payload
-// 			ch, n, err := p.p.Next(p.stream)
-// 			if err != io.EOF {
-// 				p.err = err
-// 				return 0, p.err
-// 			}
-
-// 			if ch != p.channel {
-// 				// TODO: make a (/dev/null)-like reader
-// 				nbuf := make([]byte, n)
-// 				m, err := p.stream.Read(nbuf)
-// 				if err != nil {
-// 					return 0, err
-// 				}
-// 				if int64(m) != n {
-// 					return 0, io.EOF
-// 				}
-// 			}
-
-// 			if err == io.EOF {
-// 				return 0, io.EOF
-// 			}
-// 		}
-
-// 	}
-
-// 	return n, err
-// }
-
-// will stream till Error or EOF
-// TODO: implement a writer
-func (p *packer) Stream(channel Channel, w io.Writer, r io.Reader, buf []byte) error {
+func (p *packer) Stream(channel Channel, w io.Writer, r io.Reader, bufSize int) (int64, error) {
 	var (
 		err error
 		n   int
+		l   int64
 	)
+
 	defer func() {
-		err = p.SendClose(channel, w, err)
+		p.SendClose(channel, w, err)
 	}()
+
+	buf := make([]byte, bufSize)
 
 	for {
 		n, err = r.Read(buf)
-		fmt.Println("---", n, err)
+		l += int64(n)
 		if n > 0 {
 			err := p.Send(channel, w, bytes.NewBuffer(buf), int64(n))
 			if err != nil {
-				return fmt.Errorf("failed to send body payload with %w", err)
+				return l, fmt.Errorf("failed to send body payload with %w", err)
 			}
 		}
 		if err != nil {
-			return fmt.Errorf("stream ended with %w", err)
+			if err == io.EOF {
+				return l, io.EOF
+			}
+			return l, fmt.Errorf("stream ended with %w", err)
 		}
 	}
+
 }
 
 func (p *packer) SendClose(channel Channel, w io.Writer, err error) error {
