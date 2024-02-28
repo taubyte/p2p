@@ -301,6 +301,7 @@ func TestClientUpgrade(t *testing.T) {
 					n, err := rw.Read(buf)
 					if n > 0 {
 						rw.Write([]byte(strings.ToUpper(string(buf[:n]))))
+
 					}
 					if err != nil {
 						return
@@ -444,17 +445,19 @@ func TestClientUpgrade(t *testing.T) {
 		}
 
 		// command with big argument
-		bigMessageBase := "1234567890qwertyuiopasdfghjklzxcvbnm1234567890qwertyuiopasdfghjklzxcvbnm"
-		var bigMessage string
-		bigMessageCount := 1024 * 1024 / len(bigMessageBase)
+		base := "1234567890qwertyuiopasdfghjklzxcvbnm1234567890qwertyuiopasdfghjklzxcvbnm"
+		var bigMessageBase string
+		bigMessageCount := 32 * 1024 / len(base)
 		for i := 0; i < bigMessageCount; i++ {
-			bigMessage += bigMessageBase
+			bigMessageBase += base
 		}
 
 		if _, err := res3.Write([]byte(bigMessageBase)); err != nil {
 			t.Error(err)
 			return
 		} else {
+			res3.CloseWrite()
+
 			buf := make([]byte, 1024)
 			length := 0
 			for {
@@ -609,7 +612,7 @@ func TestClientMultiSend(t *testing.T) {
 			return
 		}
 		if m, err := r.Get("message"); err != nil || m.(string) != "HI" {
-			t.Errorf("node %s returned bad response `%v`", r.PID().Pretty(), m)
+			t.Errorf("node %s returned bad response `%v`", r.PID().String(), m)
 			r.Close()
 			return
 		}

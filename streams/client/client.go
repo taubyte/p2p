@@ -8,7 +8,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/pkg/errors"
+	"errors"
+
 	"golang.org/x/exp/slices"
 
 	"github.com/taubyte/p2p/peer"
@@ -115,13 +116,10 @@ func (rw streamAsReadWriter) Write(p []byte) (int, error) {
 }
 
 var (
-	NumConnectTries        int           = 3
-	NumStreamers           int           = 3
-	DiscoveryLimit         int           = 1024
-	SendTimeout            time.Duration = 3 * time.Second
-	RecvTimeout            time.Duration = 3 * time.Second
-	EstablishStreamTimeout time.Duration = 5 * time.Second
-	SendToPeerTimeout      time.Duration = 10 * time.Second
+	NumConnectTries   int           = 3
+	NumStreamers      int           = 3
+	DiscoveryLimit    int           = 1024
+	SendToPeerTimeout time.Duration = 10 * time.Second
 
 	MaxStreamsPerSend = 16
 
@@ -187,6 +185,14 @@ func (r *Request) Do() (<-chan *Response, error) {
 	return r.client.send(r.cmd, r.body, strms, r.threshold, r.cmdTimeout)
 }
 
+func (r *Response) CloseRead() {
+	r.ReadWriter.(streamAsReadWriter).ReadWriter.(network.Stream).CloseRead()
+}
+
+func (r *Response) CloseWrite() {
+	r.ReadWriter.(streamAsReadWriter).ReadWriter.(network.Stream).CloseWrite()
+}
+
 func (r *Response) Close() {
 	r.ReadWriter.(streamAsReadWriter).ReadWriter.(network.Stream).Reset()
 }
@@ -198,13 +204,6 @@ func (c *Client) openStream(pid peerCore.ID) (stream, error) {
 	}
 
 	return stream{Stream: strm, ID: pid}, nil
-}
-
-func min(t0 time.Time, t1 time.Time) time.Time {
-	if t0.Before(t1) {
-		return t0
-	}
-	return t1
 }
 
 func (c *Client) discover(ctx context.Context) <-chan peerCore.AddrInfo {
@@ -292,7 +291,7 @@ func (c *Client) sendTo(strm stream, deadline time.Time, cmdName string, body co
 	cmd := command.New(cmdName, body)
 	rw := streamAsReadWriter{strm.Stream}
 
-	if err := strm.SetWriteDeadline(min(time.Now().Add(SendTimeout), deadline)); err != nil {
+	if err := strm.SetWriteDeadline(deadline); err != nil {
 		return &Response{
 			ReadWriter: rw,
 			pid:        strm.ID,
@@ -309,7 +308,7 @@ func (c *Client) sendTo(strm stream, deadline time.Time, cmdName string, body co
 		}
 	}
 
-	if err := strm.SetReadDeadline(min(time.Now().Add(RecvTimeout), deadline)); err != nil {
+	if err := strm.SetReadDeadline(deadline); err != nil {
 		return &Response{
 			ReadWriter: rw,
 			pid:        strm.ID,
